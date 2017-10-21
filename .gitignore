@@ -1,0 +1,8 @@
+*.orig
+*.rej
+*.o
+*.a
+README
+bin/
+*~
+*.swp
