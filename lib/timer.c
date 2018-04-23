@@ -1,0 +1,247 @@
+/*
+ * Soft:        Scheduler-ng is a high performances I/O multiplexer.
+ *              This tool is articulated around epoll() and a red black tree
+ *              in order to offer low latency and CPU optimized scheduling
+ *              cycles.
+ *
+ * Author:      Alexandre Cassen, <acassen@gmail.com>
+ *
+ *              This program is distributed in the hope that it will be useful,
+ *              but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *              MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *              See the GNU General Public License for more details.
+ *
+ *              This program is free software; you can redistribute it and/or
+ *              modify it under the terms of the GNU General Public License
+ *              as published by the Free Software Foundation; either version
+ *              2 of the License, or (at your option) any later version.
+ *
+ * Copyright (C) 2018 Alexandre Cassen, <acassen@gmail.com>
+ */
+
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include "timer.h"
+
+/* time_now holds current time */
+timeval_t time_now;
+
+/* set a timer to a specific value */
+timeval_t
+timer_dup(timeval_t b)
+{
+	timeval_t a;
+
+	timer_reset_lazy(a);
+	a.tv_sec = b.tv_sec;
+	a.tv_usec = b.tv_usec;
+	return a;
+}
+
+/* timer compare */
+int
+timer_cmp(timeval_t a, timeval_t b)
+{
+	time_t ret = a.tv_sec - b.tv_sec;
+	if (ret)
+		return ret < 0 ? -1 : 1;
+
+	ret = a.tv_usec - b.tv_usec;
+	return ret < 0 ? -1 : ret > 0 ? 1 : 0;
+}
+
+/* timer sub */
+timeval_t
+timer_sub(timeval_t a, timeval_t b)
+{
+	timeval_t ret;
+
+	timer_reset_lazy(ret);
+	ret.tv_usec = a.tv_usec - b.tv_usec;
+	ret.tv_sec = a.tv_sec - b.tv_sec;
+
+	if (ret.tv_usec < 0) {
+		ret.tv_usec += TIMER_HZ;
+		ret.tv_sec--;
+	}
+
+	return ret;
+}
+
+/* timer add */
+timeval_t
+timer_add(timeval_t a, timeval_t b)
+{
+	timeval_t ret;
+
+	timer_reset_lazy(ret);
+	ret.tv_usec = a.tv_usec + b.tv_usec;
+	ret.tv_sec = a.tv_sec + b.tv_sec;
+
+	if (ret.tv_usec >= (int)TIMER_HZ) {
+		ret.tv_sec++;
+		ret.tv_usec -= TIMER_HZ;
+	}
+
+	return ret;
+}
+
+timeval_t
+timer_add_long(timeval_t a, unsigned long b)
+{
+	timeval_t ret;
+
+	timer_reset_lazy(ret);
+
+	if (b == TIMER_NEVER)
+	{
+		ret.tv_usec = TIMER_HZ - 1;
+		ret.tv_sec = LONG_MAX;
+
+		return ret;
+	}
+
+	ret.tv_usec = a.tv_usec + (int)(b % TIMER_HZ);
+	ret.tv_sec = a.tv_sec + (int)(b / TIMER_HZ);
+
+	if (ret.tv_usec >= (int)TIMER_HZ) {
+		ret.tv_sec++;
+		ret.tv_usec -= TIMER_HZ;
+	}
+
+	return ret;
+}
+
+/* This function is a wrapper for gettimeofday(). It uses local storage to
+ * guarantee that the returned time will always be monotonic. If the time goes
+ * backwards, it returns the same as previous one and readjust its internal
+ * drift. If the time goes forward further than TIME_MAX_FORWARD_US
+ * microseconds since last call, it will bound it to that value. It is designed
+ * to be used as a drop-in replacement of gettimeofday(&now, NULL). It will
+ * normally return 0, unless <now> is NULL, in which case it will return -1 and
+ * set errno to EFAULT.
+ */
+static int
+monotonic_gettimeofday(timeval_t *now)
+{
+	static timeval_t mono_date;
+	static timeval_t drift; /* warning: signed seconds! */
+	timeval_t sys_date, adjusted, deadline;
+
+	if (!now) {
+		errno = EFAULT;
+		return -1;
+	}
+
+	timer_reset_lazy(*now);
+
+	gettimeofday(&sys_date, NULL);
+
+	/* on first call, we set mono_date to system date */
+	if (mono_date.tv_sec == 0) {
+		mono_date = sys_date;
+		timer_reset(drift);
+		*now = mono_date;
+		return 0;
+	}
+
+	/* compute new adjusted time by adding the drift offset */
+	adjusted = timer_add(sys_date, drift);
+
+	/* check for jumps in the past, and bound to last date */
+	if (timer_cmp(adjusted, mono_date) < 0)
+		goto fixup;
+
+	/* check for jumps too far in the future, and bound them to
+	 * TIME_MAX_FORWARD_US microseconds.
+	 */
+	deadline = timer_add_long(mono_date, TIME_MAX_FORWARD_US);
+	if (timer_cmp (adjusted, deadline) >= 0) {
+		mono_date = deadline;
+		goto fixup;
+	}
+
+	/* adjusted date is correct */
+	mono_date = adjusted;
+	*now = mono_date;
+	return 0;
+
+ fixup:
+	/* Now we have to recompute the drift between sys_date and
+	 * mono_date. Since it can be negative and we don't want to
+	 * play with negative carries in all computations, we take
+	 * care of always having the microseconds positive.
+	 */
+	drift = timer_sub(mono_date, sys_date);
+	*now = mono_date;
+	return 0;
+}
+
+/* current time */
+timeval_t
+timer_now(void)
+{
+	timeval_t curr_time;
+	int old_errno = errno;
+
+	/* init timer */
+	if (monotonic_gettimeofday(&curr_time)) {
+		timer_reset(curr_time);
+		errno = old_errno;
+	}
+
+	return curr_time;
+}
+
+/* sets and returns current time from system time */
+int
+set_time_now(timeval_t *now)
+{
+	int old_errno = errno;
+
+	/* init timer */
+	if (monotonic_gettimeofday(now)) {
+		timer_reset(*now);
+		errno = old_errno;
+		return -1;
+	}
+
+	return 0;
+}
+
+/* timer sub from current time */
+timeval_t
+timer_sub_now(timeval_t a)
+{
+	return timer_sub(a, time_now);
+}
+
+/* timer add to current time */
+timeval_t
+timer_add_now(timeval_t a, timeval_t *now)
+{
+	/* Init current time if needed */
+	if (timer_isnull(*now))
+		set_time_now(now);
+
+	return timer_add(*now, a);
+}
+
+/* Return time as unsigned long */
+unsigned long
+timer_tol(timeval_t a)
+{
+	unsigned long timer;
+	timer = (unsigned long)a.tv_sec * TIMER_HZ + (unsigned long)a.tv_usec;
+	return timer;
+}
+
+#ifdef _INCLUDE_UNUSED_CODE_
+/* print timer value */
+void
+timer_dump(timeval_t a)
+{
+	printf("=> %lu (usecs)\n", timer_tol(a));
+}
+#endif
