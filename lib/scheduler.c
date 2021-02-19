@@ -286,35 +286,30 @@ static int
 thread_event_del(thread_t *thread, unsigned flag)
 {
 	thread_event_t *event = thread->event;
-	int ret;
 
-	if (flag == THREAD_FL_EPOLL_READ_BIT &&
-	    __test_bit(THREAD_FL_EPOLL_READ_BIT, &event->flags)) {
+	if (!__test_bit(flag, &event->flags))
+		return 0;
+
+	if (flag == THREAD_FL_EPOLL_READ_BIT) {
 		__clear_bit(THREAD_FL_READ_BIT, &event->flags);
 		if (!__test_bit(THREAD_FL_EPOLL_WRITE_BIT, &event->flags))
 			return thread_event_cancel(thread);
 
-		ret = thread_event_set(thread);
-		if (ret < 0)
-			return -1;
 		event->read = NULL;
-		__clear_bit(THREAD_FL_EPOLL_READ_BIT, &event->flags);
 		return 0;
 	}
-
-	if (flag == THREAD_FL_EPOLL_WRITE_BIT &&
-		   __test_bit(THREAD_FL_EPOLL_WRITE_BIT, &event->flags)) {
+	else if (flag == THREAD_FL_EPOLL_WRITE_BIT) {
 		__clear_bit(THREAD_FL_WRITE_BIT, &event->flags);
 		if (!__test_bit(THREAD_FL_EPOLL_READ_BIT, &event->flags))
 			return thread_event_cancel(thread);
 
-		ret = thread_event_set(thread);
-		if (ret < 0)
-			return -1;
 		event->write = NULL;
-		__clear_bit(THREAD_FL_EPOLL_WRITE_BIT, &event->flags);
 	}
 
+	if (thread_event_set(thread) < 0)
+		return -1;
+
+	__clear_bit(flag, &event->flags);
 	return 0;
 }
 
