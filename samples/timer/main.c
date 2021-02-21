@@ -56,7 +56,7 @@ int main(int argc, char **argv)
 	thread_master_t *m;
 
 	/* Welcome message */
-	fprintf(stdout, "This program is a simple timer I/O MUX demo\n");
+	fprintf(stdout, "---\n- This program is a simple timer I/O MUX demo\n---\n\n");
 
 	/* I/O MUX init */
 	m = thread_make_master();
@@ -75,7 +75,7 @@ int main(int argc, char **argv)
 	/* I/O MUX infinite loop */
 	thread_launch_scheduler(m);
 
-	/* This is the end my freind... */
+	/* This is the end my friend... */
 	thread_destroy_master(m);
 	exit(0);
 }
