@@ -16,9 +16,10 @@
  *              as published by the Free Software Foundation; either version
  *              2 of the License, or (at your option) any later version.
  *
- * Copyright (C) 2018 Alexandre Cassen, <acassen@gmail.com>
+ * Copyright (C) 2018-2021 Alexandre Cassen, <acassen@gmail.com>
  */
 
+#include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -27,7 +28,6 @@
 #include <sys/signalfd.h>
 #include "scheduler.h"
 #include "memory.h"
-#include "utils.h"
 #include "bitops.h"
 
 /* Update timer value */

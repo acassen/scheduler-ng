@@ -16,7 +16,7 @@
  *              as published by the Free Software Foundation; either version
  *              2 of the License, or (at your option) any later version.
  *
- * Copyright (C) 2018 Alexandre Cassen, <acassen@gmail.com>
+ * Copyright (C) 2018-2021 Alexandre Cassen, <acassen@gmail.com>
  */
 
 #ifndef _MEMORY_H
@@ -26,43 +26,13 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-/* Local defines */
-#ifdef _MEM_CHECK_
-
-#define MAX_ALLOC_LIST 2048
-
-#define MALLOC(n)    ( keepalived_malloc((n), \
-		      (__FILE__), (char *)(__FUNCTION__), (__LINE__)) )
-#define FREE(b)      ( keepalived_free((b), \
-		      (__FILE__), (char *)(__FUNCTION__), (__LINE__)), \
-		       (b) = NULL )
-#define REALLOC(b,n) ( keepalived_realloc((b), (n), \
-		      (__FILE__), (char *)(__FUNCTION__), (__LINE__)) )
-
-extern size_t mem_allocated;
-
-/* Memory debug prototypes defs */
-extern void memcheck_log(const char *, const char *, const char *, const char *, int);
-extern void *keepalived_malloc(size_t, char *, char *, int)
-		__attribute__((alloc_size(1))) __attribute__((malloc));
-extern int keepalived_free(void *, char *, char *, int);
-extern void *keepalived_realloc(void *, size_t, char *, char *, int)
-		__attribute__((alloc_size(2)));
-
-extern void mem_log_init(const char *, const char *);
-extern void skip_mem_dump(void);
-extern void enable_mem_log_termination(void);
-
-#else
-
-extern void *zalloc(unsigned long size);
-
-#define MALLOC(n)    (zalloc(n))
-#define FREE(p)      (free(p), (p) = NULL)
-#define REALLOC(p,n) (realloc((p),(n)))
-
-#endif
-
-/* Common defines */
+/* common defines */
+#define MALLOC(n)	(zalloc(n))
+#define FREE(p)		(free(p), (p) = NULL)
+#define REALLOC(p,n)	(realloc((p),(n)))
 #define FREE_PTR(p)	{ if (p) { FREE(p);} }
+
+/* prototypes */
+extern void *zalloc(unsigned long);
+
 #endif

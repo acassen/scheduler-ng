@@ -16,11 +16,10 @@
  *              as published by the Free Software Foundation; either version
  *              2 of the License, or (at your option) any later version.
  *
- * Copyright (C) 2018 Alexandre Cassen, <acassen@gmail.com>
+ * Copyright (C) 2018-2021 Alexandre Cassen, <acassen@gmail.com>
  */
 
 #include <stdio.h>
-#include <string.h>
 #include <errno.h>
 #include "timer.h"
 
