@@ -22,6 +22,11 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
+#include <assert.h>
+#include <errno.h>
+#include <syslog.h>
+#include <sys/time.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/epoll.h>
 #include <sys/timerfd.h>
